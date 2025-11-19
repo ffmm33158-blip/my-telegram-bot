@@ -1,0 +1,444 @@
+{
+  "name": "EduBot Telegram Teaching Assistant and Group Manager",
+  "nodes": [
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "id-1",
+              "name": "sessionId",
+              "value": "={{ $json.message.chat.id }}",
+              "type": "string"
+            },
+            {
+              "id": "id-2",
+              "name": "userId",
+              "value": "={{ $json.message.from.id }}",
+              "type": "string"
+            },
+            {
+              "id": "id-3",
+              "name": "userName",
+              "value": "={{ $json.message.from.first_name }}",
+              "type": "string"
+            },
+            {
+              "id": "id-4",
+              "name": "messageText",
+              "value": "={{ $json.message.text }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "f5c26032-85ee-48a3-b430-8393091cd199",
+      "name": "Workflow Configuration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1536,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "id-1",
+              "leftValue": "={{ $json.message.document }}",
+              "operator": {
+                "type": "object",
+                "operation": "exists"
+              }
+            },
+            {
+              "id": "id-2",
+              "leftValue": "={{ $json.message.photo }}",
+              "operator": {
+                "type": "array",
+                "operation": "exists"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "de6bd45e-d010-4ae5-a97c-84597e3a8213",
+      "name": "Check for File Upload",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1312,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $json.message.document ? $json.message.document.file_id : $json.message.photo[0].file_id }}",
+        "additionalFields": {}
+      },
+      "id": "e753bc6b-972d-4d4c-b0a6-34f180b86199",
+      "name": "Download File from Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -832,
+        64
+      ],
+      "webhookId": "cab8b1d1-1bdb-4dcc-94e4-d4c8808080c2",
+      "credentials": {
+        "telegramApi": {
+          "id": "ol8GvxV64Q2V9nXD",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "memoryKey": {
+          "__rl": true,
+          "mode": "id",
+          "value": "edubot_documents"
+        }
+      },
+      "id": "01a5b35c-e8f2-4aa0-9ecc-580448f083f0",
+      "name": "Store Documents in Vector Store",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreInMemory",
+      "typeVersion": 1.3,
+      "position": [
+        -304,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "dataType": "binary",
+        "loader": "pdfLoader",
+        "textSplittingMode": "custom",
+        "options": {}
+      },
+      "id": "5d803984-424d-4bc2-a9a9-d4448c1c210c",
+      "name": "Document Loader",
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        -208,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "chunkOverlap": 200,
+        "options": {}
+      },
+      "id": "113ec505-fcbf-4041-9b14-d9e26946888b",
+      "name": "Text Splitter",
+      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "typeVersion": 1,
+      "position": [
+        -128,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "Search through uploaded educational documents (PDF, Word, PowerPoint) to find relevant information and answer questions",
+        "memoryKey": {
+          "__rl": true,
+          "mode": "id",
+          "value": "edubot_documents"
+        },
+        "topK": 5
+      },
+      "id": "615a7271-2fb8-4c85-b646-ee9dfc2cba01",
+      "name": "Search Documents Vector Store",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreInMemory",
+      "typeVersion": 1.3,
+      "position": [
+        -832,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=User: {{ $json.userName }}\nMessage: {{ $json.messageText }}\nChat ID: {{ $json.sessionId }}",
+        "options": {
+          "systemMessage": "You are \"EduBot\" - an intelligent teaching assistant and group manager in Telegram.\n\n## YOUR ROLE:\n- Educational Assistant: Answer questions from uploaded files (PDF, Word, PowerPoint)\n- Group Manager: Welcome new members, answer FAQs, provide guidelines\n- Multi-language Support: Detect user language (Arabic/English) and respond in the same language\n\n## YOUR CAPABILITIES:\n1. Use the search_documents tool to find information in uploaded files\n2. Provide detailed explanations with examples\n3. Break down complex concepts into simple terms\n4. Create study summaries and key points\n5. Reference specific document sections when possible\n6. Use the send_message tool to respond to users\n\n## COMMUNICATION STYLE:\n- Friendly and approachable yet professional\n- Patient with beginners and complex questions\n- Clear and structured responses\n- Use emojis appropriately 🎯\n- Adaptive tone based on user style\n\n## RESPONSE GUIDELINES:\n1. For educational queries: Search documents first, then provide comprehensive answers\n2. For administrative questions: Be concise and helpful\n3. For file-based questions: Reference specific sections\n4. If unsure: Ask clarifying questions\n5. Admit when you don't know something\n6. Always use the send_message tool to respond to the user\n\n## LANGUAGE DETECTION:\n- Detect if the user is writing in Arabic or English\n- Respond in the same language\n- Maintain language consistency throughout the conversation\n\nRemember: You are both a knowledgeable teacher and a helpful group assistant!"
+        }
+      },
+      "id": "080e088c-44a9-49b5-b560-438821d9bc00",
+      "name": "EduBot AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        -928,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "contextWindowLength": 10
+      },
+      "id": "252768d2-bf5d-482f-bd9e-bab04aa06af3",
+      "name": "Conversation Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        -960,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Send a message to the Telegram user. Use this to respond to user queries.",
+        "chatId": "={{ $fromAI('chatId', 'The Telegram chat ID to send the message to', 'string') }}",
+        "text": "={{ $fromAI('message', 'The message text to send to the user', 'string') }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "42f6ddeb-47a3-4825-8a81-fc0de6ff576b",
+      "name": "Telegram Response Tool",
+      "type": "n8n-nodes-base.telegramTool",
+      "typeVersion": 1.2,
+      "position": [
+        -544,
+        592
+      ],
+      "webhookId": "8d417bb5-7bae-49df-ba44-972eea6fbcc1",
+      "credentials": {
+        "telegramApi": {
+          "id": "ol8GvxV64Q2V9nXD",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {
+          "download": true
+        }
+      },
+      "id": "3b06c73d-5238-4b6f-9540-389d52b5a13c",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1760,
+        224
+      ],
+      "webhookId": "cf47f5c0-116d-4523-9899-cfcd1c0c79d4",
+      "credentials": {
+        "telegramApi": {
+          "id": "ol8GvxV64Q2V9nXD",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelName": "gemini-1.5-flash",
+        "options": {
+          "maxOutputTokens": 2000,
+          "temperature": 0.3
+        }
+      },
+      "id": "718018c1-a2b1-4d6f-b093-f2022b3c7366",
+      "name": "Google Gemini Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        -1088,
+        592
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "lD1UDuGxCOXl6xF3",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "3a5ddaab-27f4-43e7-8197-fb30674f4e96",
+      "name": "Embeddings Google Gemini",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        -336,
+        288
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "lD1UDuGxCOXl6xF3",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Workflow Configuration": {
+      "main": [
+        [
+          {
+            "node": "Check for File Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check for File Upload": {
+      "main": [
+        [
+          {
+            "node": "Download File from Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "EduBot AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download File from Telegram": {
+      "main": [
+        [
+          {
+            "node": "Store Documents in Vector Store",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Text Splitter": {
+      "ai_textSplitter": [
+        [
+          {
+            "node": "Document Loader",
+            "type": "ai_textSplitter",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Document Loader": {
+      "ai_document": [
+        [
+          {
+            "node": "Store Documents in Vector Store",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conversation Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "EduBot AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Documents Vector Store": {
+      "ai_tool": [
+        [
+          {
+            "node": "EduBot AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Response Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "EduBot AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Workflow Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "EduBot AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings Google Gemini": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Store Documents in Vector Store",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "Search Documents Vector Store",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "e78ef683-3bcc-4114-ac9a-64d7ef6f3ae3",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "92e75092c42263268873eac372af69526a9cd3ae9cb59deec1e72829a09b72c0"
+  },
+  "id": "HJX0qRgMBqo9tNbl",
+  "tags": []
+}
